@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <title>Trash‑Sorting Game – p5.js</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js"></script>
+  <style>
+    html, body {height:100%;margin:0}
+    body {display:flex;align-items:center;justify-content:center;background:#202020;overflow:hidden}
+  </style>
+</head>
+<body>
+<script>
+/****************************************************
+ *  p5.js trash‑sorting game                        *
+ *  – randomised containers & visible hitboxes      *
+ ****************************************************/
+
+/* === Game constants === */
+const GAME_W = 640, GAME_H = 700;
+const GRAVITY = 0.25, LAUNCH_SPEED = 25, RESTITUTION = 0.125, WALL_FRICTION = 0.9;
+const ARROW_SPEED = 2, POLL_DELAY = 1000;
+const ENDPOINT = "http://127.0.0.1:5000/";
+const TYPES = ["PET", "Batterie", "Elektroschrott", "Karton"];
+const IMG_DIR = "img";
+const MISS_TIMEOUT = 2000;      // ms until despawn
+const HITBOX_COLOR = [0, 255, 255, 180]; // auffälliges Cyan mit leichter Transparenz
+
+/* === Globals === */
+let containers = [], trash = null, containerImg = {};
+let success = 0, msg = "", msgFrames = 0, msgColor;
+let groundY, polling = true, arrowRot = 0;
+
+/* === Preload images === */
+function preload(){
+  TYPES.forEach(t=>{
+    containerImg[t] = loadImage(`${IMG_DIR}/Container_${t}.png`, ()=>{}, ()=>{});
+  });
+}
+
+/* === Classes === */
+class Trash{
+  constructor(x,y,r,type){
+    this.pos=createVector(x,y);
+    this.vel=createVector(0,0);
+    this.r=r;
+    this.type=type;
+    this.launched=false;
+    this.launchedAt=0;
+  }
+  applyImpulse(vec){this.vel.add(vec);this.launched=true;this.launchedAt=millis();}
+  update(){if(!this.launched) return;
+    this.vel.y += GRAVITY;
+    this.pos.add(this.vel);
+    // ground
+    if(this.pos.y + this.r > groundY){
+      this.pos.y = groundY - this.r;
+      this.vel.y *= -RESTITUTION;
+      this.vel.x *= WALL_FRICTION;
+      if(abs(this.vel.y) < 0.5) this.vel.y = 0;
+    }
+    // walls
+    if(this.pos.x - this.r < 0){this.pos.x = this.r; this.vel.x *= -WALL_FRICTION;}
+    if(this.pos.x + this.r > GAME_W){this.pos.x = GAME_W - this.r; this.vel.x *= -WALL_FRICTION;}
+  }
+  draw(){fill(200,100,200);noStroke();ellipse(this.pos.x, this.pos.y, this.r*2);}
+}
+
+class Container{
+  constructor(x,y,w,h,type){
+    this.pos=createVector(x,y);
+    this.w=w; this.h=h; this.type=type;
+  }
+  draw(){
+    imageMode(CENTER);
+    const img = containerImg[this.type];
+    if(img && img.width){
+      image(img, this.pos.x, this.pos.y, this.w, this.h);
+    } else {
+      rectMode(CENTER);
+      fill(100,200,100);
+      rect(this.pos.x, this.pos.y, this.w, this.h);
+      fill(0);
+      textAlign(CENTER,CENTER);
+      textSize(14);
+      text(this.type, this.pos.x, this.pos.y);
+    }
+    /* sichtbare Hitbox */
+    push();
+    rectMode(CENTER);
+    noFill();
+    stroke(...HITBOX_COLOR);
+    strokeWeight(3);
+    rect(this.pos.x, this.pos.y, this.w, this.h);
+    pop();
+  }
+  collides(circ){
+    const nx = constrain(circ.pos.x, this.pos.x - this.w/2, this.pos.x + this.w/2);
+    const ny = constrain(circ.pos.y, this.pos.y - this.h/2, this.pos.y + this.h/2);
+    return sq(circ.pos.x - nx) + sq(circ.pos.y - ny) < sq(circ.r);
+  }
+}
+
+/* === Gameplay helpers === */
+function repositionContainers(){
+  const marginX = 40; // horizontal margin
+  const w = 140, h = 110;
+  const xSlots = [];
+  const stepX = (GAME_W - 2*marginX) / TYPES.length;
+  for(let i=0;i<TYPES.length;i++) xSlots.push(marginX + stepX/2 + i*stepX);
+  shuffle(xSlots,true);
+  const topY = 60 + h/2;
+  const bottomY = GAME_H/2 - h/2 - 20;
+  containers.forEach((c,i)=>{
+    c.pos.x = xSlots[i];
+    c.pos.y = random(topY, bottomY);
+  });
+}
+
+function spawnTrash(type){
+  trash = new Trash(GAME_W/2, GAME_H - 80, 15, type);
+  repositionContainers();
+}
+
+function showMessage(t,col){msg=t;msgColor=col;msgFrames=60;}
+function fireTrash(){if(!trash||trash.launched)return;const v=createVector(0,-LAUNCH_SPEED).rotate(arrowRot);trash.applyImpulse(v);}  
+
+/* === Long‑poll button === */
+async function pollButton(){if(!polling) return;try{const r=await fetch(ENDPOINT);if((await r.text()).trim()==="pressed") fireTrash();}catch(_){/* ignore */}finally{setTimeout(pollButton,POLL_DELAY);} }
+
+/* === p5 setup === */
+function setup(){
+  const cv = createCanvas(GAME_W, GAME_H);
+  cv.style('border','4px solid white');
+  cv.style('box-shadow','0 0 20px rgba(0,0,0,0.6)');
+  textFont("Arial"); angleMode(RADIANS);
+  groundY = GAME_H - 40;
+  const w=140,h=110;
+  for(let i=0;i<TYPES.length;i++) containers.push(new Container(0,0,w,h,TYPES[i]));
+  spawnTrash(random(TYPES));
+  pollButton();
+}
+
+/* === Main draw loop === */
+function draw(){
+  background(120);
+  if(trash && !trash.launched){
+    arrowRot = sin((millis()/1000)*ARROW_SPEED)*HALF_PI;
+    push(); translate(trash.pos.x, trash.pos.y-50); rotate(arrowRot);
+    noStroke(); fill(255); triangle(-10,0,10,0,0,-25); pop();
+  }
+  if(trash && trash.launched && millis() - trash.launchedAt > MISS_TIMEOUT){
+    success = 0; showMessage("Zeit abgelaufen!", color(255,0,0)); spawnTrash(random(TYPES));
+  }
+  if(trash){
+    trash.update(); trash.draw();
+    if(trash.pos.y - trash.r > GAME_H + 100){ success = 0; spawnTrash(random(TYPES)); }
+  }
+  for(const c of containers){
+    c.draw();
+    if(trash && trash.launched && c.collides(trash)){
+      const ok = trash.type === c.type;
+      success = ok ? success + 1 : 0;
+      showMessage(ok ? "Richtig Sortiert!" : "Falsch Sortiert!", ok ? color(0,255,0) : color(255,0,0));
+      spawnTrash(random(TYPES));
+    }
+  }
+  fill(90,200,90); rect(0, groundY, GAME_W, 40);
+  fill(255); textSize(24); textAlign(CENTER,CENTER);
+  if(trash) text(trash.type, GAME_W/2, groundY-20);
+  text(`Score: ${success}`, GAME_W/2, 30);
+  if(msgFrames-- > 0){ fill(msgColor); textSize(28); text(msg, GAME_W/2, GAME_H/2); }
+}
+
+function keyPressed(){ if(key === ' ') fireTrash(); }
+function cleanup(){ polling = false; }
+window.addEventListener("beforeunload", cleanup);
+</script>
+</body>
+</html>
