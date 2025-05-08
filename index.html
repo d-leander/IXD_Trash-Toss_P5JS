@@ -19,17 +19,20 @@
 <script>
 const GAME_W = 640, GAME_H = 900;
 const GRAVITY = 0.25, LAUNCH_SPEED = 25, RESTITUTION = 0.125, WALL_FRICTION = 0.9;
-const ARROW_SPEED = 2, POLL_DELAY = 1000, MISS_TIMEOUT = 2000;
+const ARROW_SPEED = 2, POLL_DELAY = 50, MISS_TIMEOUT = 2000;
 const ENDPOINT = "http://127.0.0.1:5000/";
 const TYPES = ["PET", "Batterie", "Elektroschrott", "Karton"];
 const IMG_DIR = "img";
 const HITBOX_COLOR = [0, 255, 255, 180];
-const SCALE_FACTOR = 1 / 9;
+const SCALE_FACTOR = 1 / 6;
 
 let containerImg = {};
 let containers = [], trash = null;
 let success = 0, msg = "", msgFrames = 0, msgColor;
 let groundY, polling = true, arrowRot = 0;
+
+// === SERIAL ===
+let port, reader, latestLine = "";
 
 function preload() {
   TYPES.forEach(t => {
