@@ -4,23 +4,87 @@
   <meta charset="UTF-8" />
   <title>Trash‑Sorting Game – p5.js</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
   <style>
-    html, body { height: 100%; margin: 0; }
     body {
+      margin: 0;
+      background: #202020;
       display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+    }
+    
+    #main-container {
+      display: flex;
+      flex-direction: row;
+      gap: 40px;
       align-items: center;
       justify-content: center;
-      background: #202020;
-      overflow: hidden;
+    }
+    
+    #control-panel {
+      width: 240px;
+      height: 480px;
+      
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: space-evenly;
+    }
+    
+    #arcade-title {
+      font-family: 'Press Start 2P', cursive;
+      font-size: 14px;
+      color: #0ff;
+      text-shadow: 2px 2px 4px #000;
+      margin: 0;
+    }
+    
+    #button-row {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+    
+    #connect-serial, .restart-btn {
+      font-family: 'Press Start 2P', cursive;
+      font-size: 10px;
+      padding: 10px 16px;
+      background: #111;
+      border: 2px solid #0ff;
+      border-radius: 10px;
+      color: #0ff;
+      text-shadow: 1px 1px 2px #000;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+    
+    #connect-serial:hover, .restart-btn:hover {
+      background: #0ff;
+      color: #111;
+      box-shadow: 0 0 10px #0ff;
     }
   </style>
 </head>
 <body>
+  <div id="main-container">
+    <div id="control-panel">
+      <h1 id="arcade-title">🎮 Güsel Toss</h1>
+      <div id="button-row">
+        <button id="connect-serial">🔌 Serial verbinden</button>
+        <button id="restart-button" class="restart-btn">↻ Neustart</button>
+      </div>
+    </div>
+
+    <div id="game-wrapper">
+      <!-- p5.js canvas gets injected here -->
+    </div>
+  </div>
 <script>
 const GAME_W = 640, GAME_H = 900;
 const GRAVITY = 0.25, LAUNCH_SPEED = 25, RESTITUTION = 0.125, WALL_FRICTION = 0.9;
-const ARROW_SPEED = 2, POLL_DELAY = 50, MISS_TIMEOUT = 2000;
-const ENDPOINT = "http://127.0.0.1:5000/";
+const ARROW_SPEED = 2, MISS_TIMEOUT = 2000;
 const TYPES = ["PET", "Batterie", "Elektroschrott", "Karton"];
 const IMG_DIR = "img";
 const HITBOX_COLOR = [0, 255, 255, 180];
@@ -28,10 +92,11 @@ const SCALE_FACTOR = 1 / 6;
 
 let containerImg = {};
 let containers = [], trash = null;
-let success = 0, msg = "", msgFrames = 0, msgColor;
-let groundY, polling = true, arrowRot = 0;
+let success = 0, highscore = 0, msg = "", msgFrames = 0, msgColor;
+let groundY, arrowRot = 0;
+let gameState = "home"; // 'home', 'playing', 'dead'
+let restartButton;
 
-// === SERIAL ===
 let port, reader, latestLine = "";
 
 function preload() {
@@ -89,12 +154,9 @@ class Container {
     this.h = this.img.height * SCALE_FACTOR;
     this.pos = createVector(x, y);
   }
-
   draw() {
     imageMode(CENTER);
     image(this.img, this.pos.x, this.pos.y, this.w, this.h);
-
-    // Hitbox
     push();
     rectMode(CENTER);
     noFill();
@@ -103,7 +165,6 @@ class Container {
     rect(this.pos.x, this.pos.y, this.w, this.h);
     pop();
   }
-
   collides(circ) {
     const nx = constrain(circ.pos.x, this.pos.x - this.w / 2, this.pos.x + this.w / 2);
     const ny = constrain(circ.pos.y, this.pos.y - this.h / 2, this.pos.y + this.h / 2);
@@ -178,57 +239,104 @@ async function readSerial() {
 }
 
 function handleSerialLine(line) {
-  if (line === "pressed") fireTrash();
+  if (line === "pressed"){
+    if (gameState === "home"  || gameState === "dead") {
+        resetGame();
+      } else if (gameState === "playing"){
+        fireTrash();
+      }
+
+  }
+
+  
 }
 
+function resetGame() {
+  success = 0;
+  containers = [];
+  TYPES.forEach(type => containers.push(new Container(0, 0, type)));
+  spawnTrash(random(TYPES));
+  gameState = "playing";
+  if (restartButton) {
+      restartButton.remove();
+      restartButton = null;
+    }
+}
 
 function setup() {
   const cv = createCanvas(GAME_W, GAME_H);
+  cv.parent("game-wrapper");
   cv.style('border', '4px solid white');
   cv.style('box-shadow', '0 0 20px rgba(0,0,0,0.6)');
   textFont("Arial");
   angleMode(RADIANS);
   groundY = GAME_H - 40;
 
-  TYPES.forEach(type => {
-    containers.push(new Container(0, 0, type));
-  });
-
-  spawnTrash(random(TYPES));
-  
-  // Button für Serial-Verbindung
-  const connectBtn = createButton("🔌 Serial verbinden");
+  /**const connectBtn = createButton("🔌 Serial verbinden");
   connectBtn.position(20, 20);
   connectBtn.mousePressed(connectSerial);
+  **/
+  document.getElementById("connect-serial").addEventListener("click", connectSerial);
+  document.getElementById("restart-button").addEventListener("click", resetGame);
 
+  gameState = "home";
 }
 
 function draw() {
   background(120);
+
+  if (gameState === "home") {
+    fill(255);
+    textAlign(CENTER, CENTER);
+    textSize(32);
+    text("Trash-Sortieren!", GAME_W / 2, GAME_H / 2 - 40);
+    textSize(20);
+    text("Drücke eine Taste, um zu starten", GAME_W / 2, GAME_H / 2);
+    return;
+  }
+
+  if (gameState === "dead") {
+    fill(255, 50, 50);
+    textAlign(CENTER, CENTER);
+    textSize(50);
+    text("Spiel vorbei!", GAME_W / 2, GAME_H / 2 - 40);
+    textSize(20);
+    text("Score: " + success, GAME_W / 2, GAME_H / 2);
+    text("Highscore: " + highscore, GAME_W / 2, GAME_H / 2 + 30);
+    if (!restartButton || restartButton === null) {
+      restartButton = createButton("↻ Neustart");
+      restartButton.class("restart-btn");
+      const x = GAME_W +400;
+      const y = GAME_H / 2 + 80;
+      restartButton.position(x, y);
+      restartButton.mousePressed(resetGame);
+    }
+    return;
+  }
 
   if (trash && !trash.launched) {
     arrowRot = sin((millis() / 1000) * ARROW_SPEED) * HALF_PI;
     push();
     translate(trash.pos.x, trash.pos.y - 50);
     rotate(arrowRot);
-    noStroke();
-    fill(255);
+    noStroke(); fill(255);
     triangle(-10, 0, 10, 0, 0, -25);
     pop();
   }
 
   if (trash && trash.launched && millis() - trash.launchedAt > MISS_TIMEOUT) {
-    success = 0;
-    showMessage("Zeit abgelaufen!", color(255, 0, 0));
-    spawnTrash(random(TYPES));
+    highscore = max(highscore, success);
+    gameState = "dead";
+    return;
   }
 
   if (trash) {
     trash.update();
     trash.draw();
     if (trash.pos.y - trash.r > GAME_H + 100) {
-      success = 0;
-      spawnTrash(random(TYPES));
+      highscore = max(highscore, success);
+      gameState = "dead";
+      return;
     }
   }
 
@@ -238,7 +346,16 @@ function draw() {
       const correct = trash.type === c.type;
       success = correct ? success + 1 : 0;
       showMessage(correct ? "Richtig Sortiert!" : "Falsch Sortiert!", correct ? color(0, 255, 0) : color(255, 0, 0));
-      spawnTrash(random(TYPES));
+      if(correct){
+        highscore = max(highscore, success);
+        spawnTrash(random(TYPES));
+      }else {
+        highscore = max(highscore, success);
+        gameState = "dead";
+        return;
+
+      }
+      
     }
   }
 
@@ -259,9 +376,12 @@ function draw() {
 }
 
 function keyPressed() {
-  if (key === ' ') fireTrash();
+  if (gameState === "home"  || gameState === "dead") {
+    resetGame();
+  } else if (gameState === "playing" && key === ' ') {
+    fireTrash(); 
+  }
 }
-
 </script>
 </body>
 </html>
