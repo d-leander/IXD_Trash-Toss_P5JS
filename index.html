@@ -24,7 +24,7 @@
     }
     
     #control-panel {
-      width: 240px;
+      width: 500px;
       height: 480px;
       
       display: flex;
@@ -35,7 +35,7 @@
     
     #arcade-title {
       font-family: 'Press Start 2P', cursive;
-      font-size: 14px;
+      font-size: 30px;
       color: #0ff;
       text-shadow: 2px 2px 4px #000;
       margin: 0;
@@ -65,14 +65,60 @@
       color: #111;
       box-shadow: 0 0 10px #0ff;
     }
+
+    #connect-serial:disabled {
+      background-color: #444;
+      color: #888;
+      border-color: #666;
+      cursor: not-allowed;
+      box-shadow: none;
+    }
+
+    #progress-container {
+      width: 80%;
+      height: 20px;
+      border: 2px solid #0ff;
+      background: #111;
+      margin: 10px 0;
+      position: relative;
+      overflow: hidden;
+    }
+    
+    #progress-bar {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #0ff, #0f0, #ff0);
+      transition: width 0.3s ease-in-out;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      font-family: 'Press Start 2P', cursive;
+      font-size: 10px;
+      color: #000;
+      text-shadow: 1px 1px 1px #fff;
+    }
+    
+    #progress-label {
+      position: absolute;
+      width: 100%;
+      text-align: center;
+      pointer-events: none;
+    }
+
   </style>
 </head>
 <body>
   <div id="main-container">
     <div id="control-panel">
       <h1 id="arcade-title">🎮 Güsel Toss</h1>
+      <div id="progress-container">
+        <div id="progress-bar">
+          <span id="progress-label">0</span>
+        </div>
+      </div>
       <div id="button-row">
-        <button id="connect-serial">🔌 Serial verbinden</button>
+        <button id="connect-serial">🔌 Button verbinden</button>
         <button id="restart-button" class="restart-btn">↻ Neustart</button>
       </div>
     </div>
@@ -98,6 +144,8 @@ let gameState = "home"; // 'home', 'playing', 'dead'
 let restartButton;
 
 let port, reader, latestLine = "";
+
+let currentThreshold = 5;
 
 function preload() {
   TYPES.forEach(t => {
@@ -205,6 +253,24 @@ function fireTrash() {
   trash.applyImpulse(impulse);
 }
 
+
+
+function updateProgressBar() {
+  const progress = Math.min(success / currentThreshold, 1);
+  const bar = document.getElementById("progress-bar");
+  const label = document.getElementById("progress-label");
+
+  bar.style.width = (progress * 100) + "%";
+  label.textContent = success;
+
+  // Wenn erreicht, Schwelle erhöhen
+  if (success >= currentThreshold) {
+    currentThreshold *= 2; // z.B. 5 → 10 → 20 ...
+    bar.style.width = "0%"; // Balken zurücksetzen
+    label.textContent = 0;
+  }
+}
+
 async function connectSerial() {
   try {
     port = await navigator.serial.requestPort();
@@ -213,6 +279,11 @@ async function connectSerial() {
     port.readable.pipeTo(decoder.writable);
     reader = decoder.readable.getReader();
     readSerial();
+
+     //Button deaktivieren nach erfolgreicher Verbindung
+     const serialBtn = document.getElementById("connect-serial");
+     serialBtn.disabled = true;
+     serialBtn.innerText = "🔌 Verbunden";
   } catch (err) {
     console.error("Serial-Verbindung fehlgeschlagen:", err);
   }
@@ -288,15 +359,20 @@ function draw() {
   if (gameState === "home") {
     fill(255);
     textAlign(CENTER, CENTER);
-    textSize(32);
-    text("Trash-Sortieren!", GAME_W / 2, GAME_H / 2 - 40);
+    
+
     textSize(20);
-    text("Drücke eine Taste, um zu starten", GAME_W / 2, GAME_H / 2);
+    text("Verbinde den Externen Button", GAME_W / 2, GAME_H - 40);
+
+    textSize(32);
+    text("Güsel-Sortieren!", GAME_W / 2, GAME_H / 2 - 40);
+    textSize(20);
+    text("Drücke den Button, um zu starten", GAME_W / 2, GAME_H / 2);
     return;
   }
 
   if (gameState === "dead") {
-    fill(255, 50, 50);
+    fill(0, 255, 255);
     textAlign(CENTER, CENTER);
     textSize(50);
     text("Spiel vorbei!", GAME_W / 2, GAME_H / 2 - 40);
@@ -306,7 +382,7 @@ function draw() {
     if (!restartButton || restartButton === null) {
       restartButton = createButton("↻ Neustart");
       restartButton.class("restart-btn");
-      const x = GAME_W +400;
+      const x = GAME_W +530;
       const y = GAME_H / 2 + 80;
       restartButton.position(x, y);
       restartButton.mousePressed(resetGame);
@@ -345,7 +421,8 @@ function draw() {
     if (trash && trash.launched && c.collides(trash)) {
       const correct = trash.type === c.type;
       success = correct ? success + 1 : 0;
-      showMessage(correct ? "Richtig Sortiert!" : "Falsch Sortiert!", correct ? color(0, 255, 0) : color(255, 0, 0));
+      updateProgressBar();
+      showMessage(correct ? "Richtig Sortiert!" : "", correct ? color(0, 255, 255) : color(255, 0, 0));
       if(correct){
         highscore = max(highscore, success);
         spawnTrash(random(TYPES));
