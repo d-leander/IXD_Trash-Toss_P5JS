@@ -144,14 +144,43 @@ function fireTrash() {
   trash.applyImpulse(impulse);
 }
 
-async function pollButton() {
-  if (!polling) return;
+async function connectSerial() {
   try {
-    const r = await fetch(ENDPOINT);
-    if ((await r.text()).trim() === "pressed") fireTrash();
-  } catch (_) {}
-  finally { setTimeout(pollButton, POLL_DELAY); }
+    port = await navigator.serial.requestPort();
+    await port.open({ baudRate: 9600 });
+    const decoder = new TextDecoderStream();
+    port.readable.pipeTo(decoder.writable);
+    reader = decoder.readable.getReader();
+    readSerial();
+  } catch (err) {
+    console.error("Serial-Verbindung fehlgeschlagen:", err);
+  }
 }
+
+async function readSerial() {
+  while (true) {
+    try {
+      const { value, done } = await reader.read();
+      if (done) break;
+      if (value) {
+        latestLine += value;
+        if (latestLine.includes("\n")) {
+          const lines = latestLine.split("\n");
+          latestLine = lines.pop();
+          for (let l of lines) handleSerialLine(l.trim());
+        }
+      }
+    } catch (err) {
+      console.error("Fehler beim Lesen:", err);
+      break;
+    }
+  }
+}
+
+function handleSerialLine(line) {
+  if (line === "pressed") fireTrash();
+}
+
 
 function setup() {
   const cv = createCanvas(GAME_W, GAME_H);
@@ -166,7 +195,12 @@ function setup() {
   });
 
   spawnTrash(random(TYPES));
-  pollButton();
+  
+  // Button für Serial-Verbindung
+  const connectBtn = createButton("🔌 Serial verbinden");
+  connectBtn.position(20, 20);
+  connectBtn.mousePressed(connectSerial);
+
 }
 
 function draw() {
@@ -227,8 +261,7 @@ function draw() {
 function keyPressed() {
   if (key === ' ') fireTrash();
 }
-function cleanup() { polling = false; }
-window.addEventListener("beforeunload", cleanup);
+
 </script>
 </body>
 </html>
