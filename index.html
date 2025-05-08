@@ -114,6 +114,25 @@
       margin-bottom: 4px;
     }
 
+    #bg-image-panel {
+      width: 370px;
+      height: 550px;
+      border: 2px solid #0ff;
+      box-shadow: 0 0 10px #0ff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #111;
+    }
+    
+    #bg-image-panel img {
+      width: 100%;
+      max-height: 100%;
+      height: auto;
+      object-fit: contain;
+      transition: opacity 0.5s ease;
+    }
+
   </style>
 </head>
 <body>
@@ -135,6 +154,9 @@
     <div id="game-wrapper">
       <!-- p5.js canvas gets injected here -->
     </div>
+    <div id="bg-image-panel">
+      <img id="bg-progress-img" src="img/BG_Natur_3.png" />
+    </div>
   </div>
 <script>
 const GAME_W = 640, GAME_H = 900;
@@ -144,6 +166,19 @@ const TYPES = ["PET", "Batterie", "Elektroschrott", "Karton"];
 const IMG_DIR = "img";
 const HITBOX_COLOR = [0, 255, 255, 180];
 const SCALE_FACTOR = 1 / 6;
+
+const bgImages = [
+  "img/BG_Natur_3.png", // verschmutzt
+  "img/BG_Natur_4.png",
+  "img/BG_Natur_5.png",
+  "img/BG_Natur_6.png" ,
+  "img/BG_Natur_7.png" ,
+  "img/BG_Natur_8.png" ,
+  "img/BG_Natur_9.png" ,
+  "img/BG_Natur_10.png"   // am saubersten
+];
+
+let bgImageIndex = 0;
 
 let containerImg = {};
 let containers = [], trash = null;
@@ -286,6 +321,23 @@ function updateProgressBar() {
     bar.style.width = (progress * 100) + "%";
 
     thresholdText.textContent = "Nächstes Ziel: " + currentThreshold + " korrekte Entsorgungen!";
+
+     // Bild ändern
+     if (bgImageIndex < bgImages.length - 1) {
+      bgImageIndex++;
+  const bgImg = document.getElementById("bg-progress-img");
+
+  // Schritt 1: Bild ausblenden
+  bgImg.style.opacity = 0;
+
+  // Schritt 2: nach kurzer Pause Quelle wechseln und wieder einblenden
+  setTimeout(() => {
+    bgImg.src = bgImages[bgImageIndex];
+    bgImg.onload = () => {
+      bgImg.style.opacity = 1;
+    };
+  }, 300);
+    }
   }
 }
 
@@ -426,15 +478,16 @@ function draw() {
     fill(0, 255, 255);
     textAlign(CENTER, CENTER);
     textSize(50);
-    text("Spiel vorbei!", GAME_W / 2, GAME_H / 2 - 40);
+    text("Falsch Sortiert", GAME_W / 2, GAME_H / 2 - 150);
+
     textSize(20);
     text("Score: " + success, GAME_W / 2, GAME_H / 2);
     text("Highscore: " + highscore, GAME_W / 2, GAME_H / 2 + 30);
     if (!restartButton || restartButton === null) {
       restartButton = createButton("↻ Neustart");
       restartButton.class("restart-btn");
-      const x = GAME_W +530;
-      const y = GAME_H / 2 + 80;
+      const x = GAME_W +210;
+      const y = GAME_H / 2 + 100;
       restartButton.position(x, y);
       restartButton.mousePressed(resetGame);
     }
@@ -494,7 +547,7 @@ function draw() {
   textSize(24);
   textAlign(CENTER, CENTER);
   if (trash) text(trash.type, GAME_W / 2, groundY - 20);
-  text(`Score: ${success}`, GAME_W / 2, 30);
+  text(`Korrekt Sortiert: ${success}`, GAME_W / 2, 30);
 
   if (msgFrames-- > 0) {
     fill(msgColor);
