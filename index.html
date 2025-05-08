@@ -106,12 +106,21 @@
       pointer-events: none;
     }
 
+    #threshold-label {
+      font-family: 'Press Start 2P', cursive;
+      font-size: 12px;
+      color: #0ff;
+      text-shadow: 1px 1px 2px #000;
+      margin-bottom: 4px;
+    }
+
   </style>
 </head>
 <body>
   <div id="main-container">
     <div id="control-panel">
       <h1 id="arcade-title">🎮 Güsel Toss</h1>
+      <div id="threshold-label">Nächstes Ziel: 2 korrekte Entsorgungen!</div>
       <div id="progress-container">
         <div id="progress-bar">
           <span id="progress-label">0</span>
@@ -145,7 +154,11 @@ let restartButton;
 
 let port, reader, latestLine = "";
 
-let currentThreshold = 5;
+let currentThreshold = 2;
+
+let fireworks = [];
+let showFireworks = false;
+let fireworkTimer = 0;
 
 function preload() {
   TYPES.forEach(t => {
@@ -208,8 +221,8 @@ class Container {
     push();
     rectMode(CENTER);
     noFill();
-    stroke(...HITBOX_COLOR);
-    strokeWeight(2);
+    //stroke(...HITBOX_COLOR);
+    //strokeWeight(2);
     rect(this.pos.x, this.pos.y, this.w, this.h);
     pop();
   }
@@ -256,18 +269,23 @@ function fireTrash() {
 
 
 function updateProgressBar() {
-  const progress = Math.min(success / currentThreshold, 1);
+  let progress = Math.min(success / currentThreshold, 1);
   const bar = document.getElementById("progress-bar");
   const label = document.getElementById("progress-label");
+  const thresholdText = document.getElementById("threshold-label");
 
   bar.style.width = (progress * 100) + "%";
   label.textContent = success;
+  thresholdText.textContent = "Nächstes Ziel: " + currentThreshold + " korrekte Entsorgungen!";
 
   // Wenn erreicht, Schwelle erhöhen
   if (success >= currentThreshold) {
+    triggerFireworks();
     currentThreshold *= 2; // z.B. 5 → 10 → 20 ...
-    bar.style.width = "0%"; // Balken zurücksetzen
-    label.textContent = 0;
+    progress = Math.min(success / currentThreshold, 1);
+    bar.style.width = (progress * 100) + "%";
+
+    thresholdText.textContent = "Nächstes Ziel: " + currentThreshold + " korrekte Entsorgungen!";
   }
 }
 
@@ -332,6 +350,39 @@ function resetGame() {
       restartButton.remove();
       restartButton = null;
     }
+}
+
+class Particle {
+  constructor(x, y, col) {
+    this.pos = createVector(x, y);
+    this.vel = p5.Vector.random2D().mult(random(2, 6));
+    this.alpha = 255;
+    this.col = col;
+  }
+
+  update() {
+    this.vel.y += 0.05;
+    this.pos.add(this.vel);
+    this.alpha -= 4;
+  }
+
+  draw() {
+    noStroke();
+    fill(red(this.col), green(this.col), blue(this.col), this.alpha);
+    ellipse(this.pos.x, this.pos.y, 4);
+  }
+
+  isDead() {
+    return this.alpha <= 0;
+  }
+}
+
+function triggerFireworks() {
+  for (let i = 0; i < 80; i++) {
+    fireworks.push(new Particle(random(width), random(height / 2), color(random(255), random(255), random(255))));
+  }
+  showFireworks = true;
+  fireworkTimer = millis();
 }
 
 function setup() {
@@ -449,6 +500,20 @@ function draw() {
     fill(msgColor);
     textSize(28);
     text(msg, GAME_W / 2, GAME_H / 2);
+  }
+
+  if (showFireworks) {
+    for (let i = fireworks.length - 1; i >= 0; i--) {
+      const f = fireworks[i];
+      f.update();
+      f.draw();
+      if (f.isDead()) fireworks.splice(i, 1);
+    }
+  
+    if (millis() - fireworkTimer > 3500) {
+      showFireworks = false;
+      fireworks = [];
+    }
   }
 }
 
