@@ -230,6 +230,7 @@
   let fireworkTimer = 0;
   
   function preload() {
+    backgroundImg = loadImage(`${IMG_DIR}/BG.png`);
     TYPES.forEach(t => {
       containerImg[t] = loadImage(`${IMG_DIR}/Container_${t}.png`);
       trashImgs[t] = [];
@@ -496,6 +497,15 @@ function triggerFireworks() {
   fireworkTimer = millis();
 }
 
+function drawBackground() {
+  if (backgroundImg) {
+    imageMode(CORNER);
+    image(backgroundImg, 0, 0, GAME_W, GAME_H);
+  } else {
+    background(120);
+  }
+}
+
 function setup() {
   const cv = createCanvas(GAME_W, GAME_H);
   cv.parent("game-wrapper");
@@ -517,7 +527,7 @@ function setup() {
 }
 
 function draw() {
-  background(120);
+  drawBackground();
 
   if (gameState === "home") {
     fill(255);
@@ -600,14 +610,14 @@ function draw() {
     }
   }
 
-  fill(90, 200, 90);
-  rect(0, groundY, GAME_W, 40);
+  //fill(90, 200, 90);
+  // rect(0, groundY, GAME_W, 40);
 
   fill(255);
   textSize(24);
   textAlign(CENTER, CENTER);
   //if (trash) text(trash.type, GAME_W / 2, groundY - 20);
-  text(`Korrekt Sortiert: ${success}`, GAME_W / 2, 30);
+  text(`Korrekt Sortiert: ${success}`, GAME_W / 2, GAME_H -30);
 
   if (msgFrames-- > 0) {
     fill(msgColor);
