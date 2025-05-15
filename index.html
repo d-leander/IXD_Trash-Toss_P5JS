@@ -2,7 +2,7 @@
 <html lang="de">
 <head>
   <meta charset="UTF-8" />
-  <title>Trash‑Sorting Game – p5.js</title>
+  <title>Güsel Toss</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
   <style>
@@ -185,88 +185,121 @@
     </div>
   </div>
 <script>
-const GAME_W = 640, GAME_H = 900;
-const GRAVITY = 0.25, LAUNCH_SPEED = 25, RESTITUTION = 0.125, WALL_FRICTION = 0.9;
-const ARROW_SPEED = 2, MISS_TIMEOUT = 2000;
-const TYPES = ["PET", "Batterie", "Elektroschrott", "Karton"];
-const IMG_DIR = "img";
-const HITBOX_COLOR = [0, 255, 255, 180];
-const SCALE_FACTOR = 1 / 6;
-
-const bgImages = [
-  "img/BG_Natur_3.png", // verschmutzt
-  "img/BG_Natur_4.png",
-  "img/BG_Natur_5.png",
-  "img/BG_Natur_6.png" ,
-  "img/BG_Natur_7.png" ,
-  "img/BG_Natur_8.png" ,
-  "img/BG_Natur_9.png" ,
-  "img/BG_Natur_10.png"   // am saubersten
-];
-
-let bgImageIndex = 0;
-
-let containerImg = {};
-let containers = [], trash = null;
-let success = 0, highscore = 0, msg = "", msgFrames = 0, msgColor;
-let groundY, arrowRot = 0;
-let gameState = "home"; // 'home', 'playing', 'dead'
-let restartButton;
-
-let port, reader, latestLine = "";
-
-let currentThreshold = 2;
-
-let fireworks = [];
-let showFireworks = false;
-let fireworkTimer = 0;
-
-function preload() {
-  TYPES.forEach(t => {
-    containerImg[t] = loadImage(`${IMG_DIR}/Container_${t}.png`);
-  });
-}
-
-class Trash {
-  constructor(x, y, r, type) {
-    this.pos = createVector(x, y);
-    this.vel = createVector(0, 0);
-    this.r = r;
-    this.type = type;
-    this.launched = false;
-    this.launchedAt = 0;
+  const GAME_W = 640, GAME_H = 900;
+  const GRAVITY = 0.25, LAUNCH_SPEED = 25, RESTITUTION = 0.125, WALL_FRICTION = 0.9;
+  const ARROW_SPEED = 2, MISS_TIMEOUT = 2000;
+  const TYPES = ["PET", "Batterie", "Elektroschrott", "Karton"];
+  const IMG_DIR = "img";
+  //const HITBOX_COLOR = [0, 255, 255, 180];
+  const SCALE_FACTOR = 1 / 6;
+  
+  const bgImages = [
+    "img/BG_Natur_3.png",
+    "img/BG_Natur_4.png",
+    "img/BG_Natur_5.png",
+    "img/BG_Natur_6.png",
+    "img/BG_Natur_7.png",
+    "img/BG_Natur_8.png",
+    "img/BG_Natur_9.png",
+    "img/BG_Natur_10.png"
+  ];
+  
+  const trashVariants = {
+    PET: 10,
+    Batterie: 11,
+    Elektroschrott: 11,
+    Karton: 12
+  };
+  
+  let bgImageIndex = 0;
+  
+  let containerImg = {};
+  let trashImgs = {}; // Neu: Trash-Images nach Typ
+  let containers = [], trash = null;
+  let success = 0, highscore = 0, msg = "", msgFrames = 0, msgColor;
+  let groundY, arrowRot = 0;
+  let gameState = "home";
+  let restartButton;
+  
+  let port, reader, latestLine = "";
+  
+  let currentThreshold = 2;
+  
+  let fireworks = [];
+  let showFireworks = false;
+  let fireworkTimer = 0;
+  
+  function preload() {
+    TYPES.forEach(t => {
+      containerImg[t] = loadImage(`${IMG_DIR}/Container_${t}.png`);
+      trashImgs[t] = [];
+      for (let i = 1; i <= trashVariants[t]; i++) {
+        const path = `${IMG_DIR}/${t}/${t}_${i}.png`;
+        trashImgs[t].push(loadImage(path));
+      }
+    });
   }
-  applyImpulse(vec) {
-    this.vel.add(vec);
-    this.launched = true;
-    this.launchedAt = millis();
-  }
-  update() {
-    if (!this.launched) return;
-    this.vel.y += GRAVITY;
-    this.pos.add(this.vel);
 
-    if (this.pos.y + this.r > groundY) {
-      this.pos.y = groundY - this.r;
-      this.vel.y *= -RESTITUTION;
-      this.vel.x *= WALL_FRICTION;
-      if (abs(this.vel.y) < 0.5) this.vel.y = 0;
+  class Trash {
+    constructor(x, y, r, type) {
+      this.pos = createVector(x, y);
+      this.vel = createVector(0, 0);
+      this.r = r;
+      this.type = type;
+      this.img = random(trashImgs[type]);
+      this.launched = false;
+      this.launchedAt = 0;
+      this.rotation = 0;
+      this.rotationSpeed = random(-0.1, 0.1);
+  
+      if (this.img) {
+        const aspect = this.img.width / this.img.height;
+        this.h = 60; // einheitliche Höhe
+        this.w = this.h * aspect;
+      } else {
+        this.w = this.h = r * 2;
+      }
     }
-    if (this.pos.x - this.r < 0) {
-      this.pos.x = this.r;
-      this.vel.x *= -WALL_FRICTION;
+    applyImpulse(vec) {
+      this.vel.add(vec);
+      this.launched = true;
+      this.launchedAt = millis();
     }
-    if (this.pos.x + this.r > GAME_W) {
-      this.pos.x = GAME_W - this.r;
-      this.vel.x *= -WALL_FRICTION;
+    update() {
+      if (!this.launched) return;
+      this.vel.y += GRAVITY;
+      this.pos.add(this.vel);
+      this.rotation += this.rotationSpeed;
+      if (this.pos.y + this.r > groundY) {
+        this.pos.y = groundY - this.r;
+        this.vel.y *= -RESTITUTION;
+        this.vel.x *= WALL_FRICTION;
+        if (abs(this.vel.y) < 0.5) this.vel.y = 0;
+      }
+      if (this.pos.x - this.r < 0) {
+        this.pos.x = this.r;
+        this.vel.x *= -WALL_FRICTION;
+      }
+      if (this.pos.x + this.r > GAME_W) {
+        this.pos.x = GAME_W - this.r;
+        this.vel.x *= -WALL_FRICTION;
+      }
+    }
+    draw() {
+      if (this.img) {
+        push();
+      translate(this.pos.x, this.pos.y);
+      rotate(this.rotation);
+      imageMode(CENTER);
+      image(this.img, 0, 0, this.w, this.h);
+      pop();
+      } else {
+        fill(200, 100, 200);
+        noStroke();
+        ellipse(this.pos.x, this.pos.y, this.r * 2);
+      }
     }
   }
-  draw() {
-    fill(200, 100, 200);
-    noStroke();
-    ellipse(this.pos.x, this.pos.y, this.r * 2);
-  }
-}
 
 class Container {
   constructor(x, y, type) {
@@ -284,7 +317,7 @@ class Container {
     noFill();
     //stroke(...HITBOX_COLOR);
     //strokeWeight(2);
-    rect(this.pos.x, this.pos.y, this.w, this.h);
+    //rect(this.pos.x, this.pos.y, this.w, this.h);
     pop();
   }
   collides(circ) {
@@ -472,6 +505,7 @@ function setup() {
   angleMode(RADIANS);
   groundY = GAME_H - 40;
 
+  //Wird nicht mehr verwendet, Button ist als HTML Element vorhanden
   /**const connectBtn = createButton("🔌 Serial verbinden");
   connectBtn.position(20, 20);
   connectBtn.mousePressed(connectSerial);
@@ -512,7 +546,7 @@ function draw() {
     if (!restartButton || restartButton === null) {
       restartButton = createButton("↻ Neustart");
       restartButton.class("restart-btn");
-      const x = GAME_W +210;
+      const x = GAME_W +(GAME_W/2);
       const y = GAME_H / 2 + 100;
       restartButton.position(x, y);
       restartButton.mousePressed(resetGame);
@@ -572,7 +606,7 @@ function draw() {
   fill(255);
   textSize(24);
   textAlign(CENTER, CENTER);
-  if (trash) text(trash.type, GAME_W / 2, groundY - 20);
+  //if (trash) text(trash.type, GAME_W / 2, groundY - 20);
   text(`Korrekt Sortiert: ${success}`, GAME_W / 2, 30);
 
   if (msgFrames-- > 0) {
